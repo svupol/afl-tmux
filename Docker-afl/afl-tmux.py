@@ -4,136 +4,141 @@ import argparse
 import os
 import libtmux
 import math
+import yaml
 
-# "-r \"unserialize(file_get_contents("php://stdin'));\""
-def init_parser():
-    parser = argparse.ArgumentParser(description='Great Description To Be Here')
 
-    # TODO in out
-    # TODO добвить режим
+def create_parser():
+    new_parser = argparse.ArgumentParser(
+        prog='AFL tmux',
+        description='Запускает выбранные цели для фаззинга в параллельном режиме и строит графики '
+                    'в Grafana',
+        epilog='Text at the bottom of help')
+
     # TODO force режим, что бы запускать на переполненных ядрах
-    # TODO добавить инфу об statsd port и host
-    # TODO флаг для завершения всех фаззеров (без закрытия сессии, что бы можно было чекнуть результаты)
-    parser.add_argument('-b', '--builds', dest='path_to_builds', type=str)
-    parser.add_argument('-a', '--args', dest="args", type=str)
+    new_parser.add_argument('-y', '--yml', dest='config', type=str,
+                            help='Путь к конфигурационному yml файлу')
+    new_parser.add_argument('-i', '--interactive', dest='is_interactive', action='store_true',
+                            help='Включает интерактивный режим выбора кол-во экземпляров')
+    new_parser.add_argument('-f', '--force', dest='is_force', action='store_true',
+                            help='Принудительно запустить указанное кол-во экземпляров без проверки на доступные ядра')
 
-    return parser
+    return new_parser
 
 
-def create_tmux_windows(threads, commands):
+def create_tmux_windows(used_threads, commands):
     server_tmux = libtmux.Server()
     print(server_tmux)
     # TODO: проверить создан ли сервер
     session = server_tmux.new_session()
 
-    windows = math.ceil(threads / 4)
-    panes_amount = threads
+    used_threads = config['used_threads']
+    windows = math.ceil(used_threads / 4)
+    panes_amount = used_threads
     print(windows)
-    # TODO: вывести на нулевом окне коммануду afl-gotcpu и не вводить
+    # TODO: вывести на нулевом окне команду afl-whatsup и не вводить
 
     for i in range(windows):
-        window_name = "{} to {} fuzzers".format((i * 4) + 1, (i * 4) + 4)
+        window_name = '{} to {} fuzzers'.format((i * 4) + 1, (i * 4) + 4)
         curr_win = session.new_window(attach=False, window_name=window_name)
         curr_win.split_window(attach=False, vertical=False)
 
-        pane1 = curr_win.select_pane("-L")
-        pane2 = curr_win.select_pane("-R")
+        pane1 = curr_win.select_pane('-R')
+        pane2 = curr_win.select_pane('-L')
         pane3 = pane1.split_window(attach=False)
         pane4 = pane2.split_window(attach=False)
 
         panes = [pane1, pane2, pane3, pane4]
         for pane in panes:
-            if threads - panes_amount < len(commands):
-                pane.send_keys(commands[threads - panes_amount], enter=True)
+            if used_threads - panes_amount < len(commands):
+                pane.send_keys(commands[used_threads - panes_amount], enter=True)
                 panes_amount -= 1
-
-
-def parse_dir(path_to_builds):
-    dir, __, files = next(os.walk(path_to_builds))
-
-    if "default" not in files:
-        print("ERROR not default")
-        exit()
-
-    if len(files) == 0:
-        print("ОШИБКА: директория с файлами для запуска пуста")
-        exit()
-
-    return files
 
 
 def get_amount_fuzzers(builds):
     out = os.popen('afl-gotcpu').read()
-    template = "\n".join(out.split("\n")[:2]) + "\n"
-    print(template)
-    print(out.replace(template, ""), end='')
+    template = '\n'.join(out.split('\n')[:2]) + '\n'
+    print(out.replace(template, ''), end='')
 
-    av_cores = out.count("AVAILABLE") + out.count("CAUTION")
-    print("Найдено файлов для параллельного запуска: " + str(builds))
-    print("Доступно ядер: " + str(av_cores))
+    av_cores = out.count('AVAILABLE') + out.count('CAUTION')
+    print('Найдено файлов для параллельного запуска: ' + str(builds))
+    print('Доступно ядер: ' + str(av_cores))
 
     nonsan_threads = 0
     if builds > av_cores:
-        print("ОШИБКА: Освободите ядра или уменьшите кол-во выбранных файлов для параллельного запуска.")
+        print('ОШИБКА: Освободите ядра или уменьшите кол-во выбранных файлов для параллельного запуска.')
         exit()
     if builds < av_cores:
-        print("Можно запустить несколько экземпляров (" + str(av_cores - builds) + ")"
-              + " программы без санитайзеров, выберите кол-во от 1 до " + str(av_cores - builds))
+        print('Можно запустить несколько экземпляров (' + str(av_cores - builds) + ')'
+              + ' программы без санитайзеров, выберите кол-во от 1 до ' + str(av_cores - builds))
 
         nonsan_threads = int(input())
         if nonsan_threads == 0:
             # TODO ну ваще та нет
-            print("ОШИБКА: должен быть хотя бы один экземпляр фаззера без санитайзеров")
+            print('ОШИБКА: должен быть хотя бы один экземпляр фаззера без санитайзеров')
             exit()
         elif nonsan_threads > av_cores - builds:
-            print("ОШИБКА: вы выбрали недоступное кол-во ядер")
+            print('ОШИБКА: вы выбрали недоступное кол-во ядер')
             exit()
 
     threads = builds + nonsan_threads
-    print("Будет запущено " + str(threads) + " экземпляров фаззера")
+    print('Будет запущено ' + str(threads) + ' экземпляров фаззера')
     return threads, nonsan_threads
 
 
-def generate_fuzzer_cmds(files, nonsan_threads, args):
+def get_fuzzer_commands(config):
     commands = []
 
-    cmd_args = {
-        'name': files[0] + "-1",
-        'file': "./" + os.path.join(args.path_to_builds, files[0]),
-        'args': args.args
+    cmd = '{env} afl-fuzz -S {name} -T {name} -i {in} -o {out} -- {path} {args}'
+    cmd_format = {
+        'env': ' '.join(config['fuzzer_settings']['afl_environment']),
+        'in': config['fuzzer_settings']['input_dir'],
+        'out': config['fuzzer_settings']['output_dir'],
+        'args': config['fuzzer_settings']['arguments']
     }
 
-    global_env = "AFL_STATSD_TAGS_FLAVOR=dogstatsd AFL_STATSD=1 AFL_STATSD_HOST=statsd_exporter AFL_STATSD_PORT=9125"
-    master_cmd = global_env + " afl-fuzz -M {name} -T {name} -i in -o out -- {file} {args}"
-    commands.append(master_cmd.format(**cmd_args))
+    targets = config['targets']
+    i = 0
+    for target in targets:
+        for t in range(targets[target]['threads']):
+            i += 1
+            cmd_format['name'] = target + '-' + str(i)
+            cmd_format['path'] = targets[target]['path']
+            commands.append(cmd.format(**cmd_format))
 
-    slave_cmd = global_env + " afl-fuzz -S {name} -T {name} -i in -o out -- {file} {args}"
-    for i in range(1, len(files)):
-        cmd_args['file'] = "./" + os.path.join(args.path_to_builds, files[i])
-        cmd_args['name'] = files[i] + "-" + str(i + 1)
-        commands.append(slave_cmd.format(**cmd_args))
-
-    if "default" in files:
-        for i in range(nonsan_threads):
-            cmd_args['name'] = "default-" + str(len(files) + i + 1)
-            cmd_args['file'] = "./" + os.path.join(args.path_to_builds, "default")
-            commands.append(slave_cmd.format(**cmd_args))
-
-    for e in commands:
-        print(e)
+    # Один из экземпляров должен быть мастером
+    commands[0] = commands[0].replace('-S', '-M')
 
     return commands
 
 
-if __name__ == "__main__":
-    parser = init_parser()
+def get_config(config_path):
+    with open(config_path, 'r') as stream:
+        config_data = yaml.safe_load(stream)
+
+    targets = config_data['targets']
+    used_threads = 0
+    for target in targets:
+        used_threads += targets[target]['threads']
+    config_data['used_threads'] = used_threads
+
+    return config_data
+
+
+if __name__ == '__main__':
+    parser = create_parser()
     args = parser.parse_args()
     print(args)
 
-    files = parse_dir(args.path_to_builds)
-    threads, nonsan_threads = get_amount_fuzzers(len(files))
-    print(threads, nonsan_threads)
+    config = get_config(args.config)
+    print(config)
 
-    commands = generate_fuzzer_cmds(files, nonsan_threads, args)
+    if args.is_interactive:
+        pass
 
-    create_tmux_windows(threads, commands)
+    if args.is_force:
+        pass
+
+    afl_commands = get_fuzzer_commands(config)
+    print(afl_commands)
+
+    create_tmux_windows(config['used_threads'], afl_commands)

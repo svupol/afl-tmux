@@ -1,0 +1,33 @@
+# НЕТ смысла запускать БОЛЕЕ ОДНОГО экземпляра для целей сбилженных с помощью санитайзеров
+targets:
+  no_sanitizer:
+    path: '/src/php-build-fast/sapi/cli/php'
+    threads: 2
+  asan:
+    path: '/src/php-build-fast/sapi/cli/php'
+    threads: 1
+  tsan:
+    path: '/src/php-build-fast/sapi/cli/php'
+    threads: 1
+  msan:
+    path: '/src/php-build-fast/sapi/cli/php'
+    threads: 1
+  ubsan:
+    path: '/src/php-build-fast/sapi/cli/php'
+    threads: 1
+  cfisan:
+    path: '/src/php-build-fast/sapi/cli/php'
+    threads: 1
+  lsan:
+    path: '/src/php-build-fast/sapi/cli/php'
+    threads: 1
+
+fuzzer_settings:
+  afl_environment:
+    - AFL_STATSD=1
+    - AFL_STATSD_TAGS_FLAVOR=dogstatsd
+    - AFL_STATSD_HOST=statsd_exporter
+    - AFL_STATSD_PORT=9125
+  input_dir: in
+  output_dir: out
+  arguments: "-r \"unserialize(file_get_contents('php://stdin'));\""

@@ -69,7 +69,7 @@ services:
       context: Docker-afl
     container_name: afl
     volumes:
-      - /home/nikita/workspace:/src
+      - /opt/workspace:/src
     security_opt:
       - seccomp=unconfined
     stdin_open: true
