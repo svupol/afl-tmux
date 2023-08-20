@@ -1,25 +1,25 @@
 # НЕТ смысла запускать БОЛЕЕ ОДНОГО экземпляра для целей сбилженных с помощью санитайзеров
 targets:
   no_sanitizer:
-    path: '/src/php-build-fast/sapi/cli/php'
+    path: '/src/php-builds/no-san/sapi/cli/php'
     threads: 2
   asan:
-    path: '/src/php-build-fast/sapi/cli/php'
+    path: '/src/php-builds/asan/sapi/cli/php'
     threads: 1
   tsan:
-    path: '/src/php-build-fast/sapi/cli/php'
+    path: '/src/php-builds/tsan/sapi/cli/php'
     threads: 1
   msan:
-    path: '/src/php-build-fast/sapi/cli/php'
+    path: '/src/php-builds/msan/sapi/cli/php'
     threads: 1
   ubsan:
-    path: '/src/php-build-fast/sapi/cli/php'
+    path: '/src/php-builds/ubsan/sapi/cli/php'
     threads: 1
   cfisan:
-    path: '/src/php-build-fast/sapi/cli/php'
+    path: '/src/php-builds/cfisan/sapi/cli/php'
     threads: 1
   lsan:
-    path: '/src/php-build-fast/sapi/cli/php'
+    path: '/src/php-builds/lsan/sapi/cli/php'
     threads: 1
 
 fuzzer_settings:

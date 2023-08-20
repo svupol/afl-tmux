@@ -31,7 +31,7 @@ services:
     image: prom/prometheus
     container_name: prometheus
     volumes:
-      - ./prometheus.yml:/prometheus.yml
+      - ./Docker/prometheus.yml:/prometheus.yml
     command:
       - '--config.file=/prometheus.yml'
     restart: unless-stopped
@@ -44,7 +44,7 @@ services:
     image: prom/statsd-exporter
     container_name: statsd_exporter
     volumes:
-      - ./statsd_mapping.yml:/statsd_mapping.yml
+      - ./Docker/statsd_mapping.yml:/statsd_mapping.yml
     command:
       - '--statsd.mapping-config=/statsd_mapping.yml'
     ports:
@@ -66,7 +66,7 @@ services:
 
   afl:
     build:
-      context: Docker-afl
+      context: Docker/afl
     container_name: afl
     volumes:
       - /opt/workspace:/src
